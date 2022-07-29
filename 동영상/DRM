@@ -95,3 +95,82 @@
 ## Apple FairPlay
 
 > https://ottverse.com/apple-fairplay-drm-how-does-it-work/
+
+
+### Apple FairPlay란?
+
+- FairPlay는 HLS 프로토콜을 사용하여 스트리밍 하는 컨텐츠를 안전하게 전달하기 위한 Apple의 DRM 솔루션이다.
+- FairPlay는 기본적으로 iOS, tvOS, macOS에서 기본적으로 지원이 된다.
+
+### FairPlay Streaming(FPS)의 구성 요소
+
+- HLS 패키징
+  - 컨텐츠 암호화 전 HLS 프로토콜을 사용하기 위해 패키징을 해야 한다.
+  - HLS는 ABR 스트리밍에 사용된다.
+  - 기본적으로 MPEG-TS(ts) 또는 Fragment MP4(fmp4) 컨테이너 형식을 지원한다.
+- SAMPLE-AES, AES-128 암호화
+  - 패키징 후 AES-128 CBC를 사용하여 암호화를 진행한다.
+  - CBC란 Cipher Block Chaining을 의미한다.
+    - CBC는 직전 블록 암호화의 출력을 사용하여 현재 블록에 영향을 준다.
+    - Initial Vector(IV)는 동일한 입력이 동일한 키로 여러 번 암호화 되더라도 다른 암호문이 생성되도록 사용한다.
+    - IV는 랜더마이저처럼 작동하여 해커가 암호문 패턴을 관찰하여 키를 식별하는 것을 방지한다.
+- SAMPE-AES
+  - 오디오 패킷, 비디오 프레임의 샘플만 CBC와 함께 AES-128을 사용하여 암호화 하는 것.
+  - 전체 세그먼트를 암호화할 필요가 없기 때문에 효율적이다.
+- AES-128
+  - 세그먼트를 128비트의 키와 CBC, PKCS7 패딩으로 완전한 암호화를 진행하는 것.
+  - CBC는 IV또는 media-sequnce 번를 사용하여 각 세그먼트 경계에서 다시 시작된다.
+
+### Client Application
+
+- Client Application은 복호화 키를 얻기 위해 License Server에 요청 메시지를 보내는 역할을 한다.
+- 콘텐츠 제공자는 자체 FPS 클라이언트 애플리케이션을 개발하거나 DRM 솔루션의 FPS SDK를 사용할 수 있다.
+
+### FPS 동작 과정
+
+![images](https://ottverse.com/wp-content/uploads/2020/10/fairplay-block-diagram-1024x758.png)
+
+1. 사용자가 `재생`을 누른다.
+2. Application 재생해야 함을 AVFoundation에 알리고 m3u8 재생 목록에 대한 세부 정보를 제공한다.
+3. AVFoundation은 m3u8 파일을 다운로드 받아 구문 분석 한다.
+4. AVFoundation은 m3u8에서 #EXT-X-KEY 태그를 찾아 암호화 여부를 확인한다. 암호화가 되어 있다면  App Delegate에 복호화 키를 요청한다.
+5. App Delegate는 AVFoundation에게 SPC(Server Playback Context) 메시지 생성을 요청한다.
+6. AVFoundation에서 SPC 수신 한 App Delegate는 Key Server로 요청을 보낸다.
+   - Key Server의 KSM은 SPC를 언래핑한다.
+   - Key Serversms SPC의 정보를 사용하여 콘텐츠 키 조회를 수행한다.
+   - 콘텐츠 키는 CKC(Context Key Context)로 래핑하는 FSM으로 전송된다.
+7. KSM은 CKC를 App Delegate를 통해 AVFoundation으로 보낸다.
+8. AVFoundation은 CKC 내부의 콘텐츠 키를 사용하여 콘텐츠를 복호화하여 사용자에게 보여준다.
+
+## Widevine
+
+> https://ottverse.com/widevine-drm-how-does-it-work/
+
+- Widevine은 Google이 소유한 DRM 솔루션이다.
+
+### Widevine 동작 과정
+
+![images](https://ottverse.com/wp-content/uploads/2020/10/widevine-security-model-1024x768.png)
+
+1. 사용자가 `재생`을 누르면 Application은 `mpd`를 다운받아 Widevine을 사용했는지 판단한 후 initData를 추출하여 플레이어에게 보낸다.
+2. 플레이어는 initData를 CDM(Content Decryption Module)로 보낸다.
+3. CDM은 플레이어로부터 initData를 받아 라이센스 요청을 생성하여 다시 플레이어에게 보낸다.
+4. 플레이어는 라이센스 요청을 받은 후 Widevine 라이센스 서버로 보낸다.
+5. 라이센스 서버는 플레이어의 요청에 따라 인증 과정을 거친 후 키와 라이선스에 대한 정보를 포함하여 전달한다.
+6. 플레이어는 라이선스 정보를 CDM에게 전달한다.
+7. CDM은 OEMCrypto 모듈에게 정보를 전달하여 복호화 및 디코딩을 진행한다.
+
+### Widevine 보안 수준
+
+- L1
+  - Widevine에서 가장 높은 수준의 보안.
+  - 하드웨어 수준의 암호 해독을 제공한다.
+  - 콘텐츠 암호 해독, 미디어 디코딩 및 렌더링 모두 TEE(Trusted Execution Environment) 내에서 수행된다.
+- L2
+  - L2에서는 미디어 복호화만 TEE 내에서만 수행된다.
+  - 디코딩 및 렌더링을 위해서는 애플리케이션으로 전송된다.
+- L3
+  - L3에서는 암호 해독을 소프트웨어 CDM에서 수행한다.
+  - 소프트웨어 암호화
+
+![images](https://ottverse.com/wp-content/uploads/2020/10/widevine-security-levels-1024x288.png)
