@@ -96,7 +96,6 @@
 
 > https://ottverse.com/apple-fairplay-drm-how-does-it-work/
 
-
 ### Apple FairPlay란?
 
 - FairPlay는 HLS 프로토콜을 사용하여 스트리밍 하는 컨텐츠를 안전하게 전달하기 위한 Apple의 DRM 솔루션이다.
@@ -133,7 +132,7 @@
 1. 사용자가 `재생`을 누른다.
 2. Application 재생해야 함을 AVFoundation에 알리고 m3u8 재생 목록에 대한 세부 정보를 제공한다.
 3. AVFoundation은 m3u8 파일을 다운로드 받아 구문 분석 한다.
-4. AVFoundation은 m3u8에서 #EXT-X-KEY 태그를 찾아 암호화 여부를 확인한다. 암호화가 되어 있다면  App Delegate에 복호화 키를 요청한다.
+4. AVFoundation은 m3u8에서 #EXT-X-KEY 태그를 찾아 암호화 여부를 확인한다. 암호화가 되어 있다면 App Delegate에 복호화 키를 요청한다.
 5. App Delegate는 AVFoundation에게 SPC(Server Playback Context) 메시지 생성을 요청한다.
 6. AVFoundation에서 SPC 수신 한 App Delegate는 Key Server로 요청을 보낸다.
    - Key Server의 KSM은 SPC를 언래핑한다.
@@ -151,6 +150,8 @@
 ### Widevine 동작 과정
 
 ![images](https://ottverse.com/wp-content/uploads/2020/10/widevine-security-model-1024x768.png)
+
+![image](https://developers.google.com/widevine/drm/overview/fig2.svg)
 
 1. 사용자가 `재생`을 누르면 Application은 `mpd`를 다운받아 Widevine을 사용했는지 판단한 후 initData를 추출하여 플레이어에게 보낸다.
 2. 플레이어는 initData를 CDM(Content Decryption Module)로 보낸다.
