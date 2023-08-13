@@ -485,3 +485,223 @@ execution( * *(..)) // 리턴 타입 모든 타입, 메소드 이름 모든 값,
   - 스프링의 AOP에서만 사용되는 용어다.
 - 애스팩트
   - AOP의 고본 모듈로 한 개 이상의 포인트컷과 어드바이스의 조합으로 이루어지며, 보통은 싱글톤 형태의 오브젝트이다.
+
+## 6.6 트랜잭션 속성
+
+### 6.6.1 트랜잭션 정의
+
+#### 트랜잭션 전파
+
+- 트랜잭션 전파(Transaction Propagation)란 트랜잭션 경계에서 이미 진행 중인 트랜잭션이 있는 경우 혹은 없을 때 어떻게 동작할 것인가를 결정하는 방식을 의미한다.
+- PROPAGATION_REQUIRED
+  - 가장 많이 사용되는 전파 속성이다.
+  - 진행 중인 트랜잭션이 있으면 참여하고, 없다면 새로 시작한다.
+  - DefaultTransactionDefinition의 전파 속성이다.
+- PROPAGATION_REQUIRES_NEW
+  - 항상 새로운 트랜잭션을 시작한다.
+  - 독립적인 트랜잭션이 보장되어야 하는 코드에 적용할 수 있다.
+- PROPAGATION_NOT_SUPPORTED
+  - 트랜잭션 없이 동작하도록 만든다.
+  - 진행중인 트랜잭션이 있어도 무시한다.
+
+#### 격리 수준
+
+- 모든 DB 트랜잭션은 격리수준(Isolation Level)을 가지고 있어야 한다.
+- 여러 트랜잭션이 동시에 진행되면서 문제가 발생하지 않도록 제어하기 위해서 격리 수준을 설정한다.
+- 격리 수준은 기본적으로 DB에 설정되어 있지만, JDBC 드라이버나 DataSource 등에서 재설정할 수 있다.
+- 트랜잭션 단위로도 격리 수준을 설정할 수 있다.
+- DefaultTransactionDefinition 에서는 기본적으로 ISOLATION_DEFAULT를 사용한다.
+  - DataSource에 설정되어 있는 기본 설정을 따른다.
+
+#### 제한 시간
+
+- 트랜잭션 수행 시간을 제한할 수 있다.
+- DefaultTransactionDefinition 에서는 기본적으로 제한 시간을 설정하지 않는다.
+- 제한 시간은 트랜잭션을 시작하는 PROPAGATION_REQUIRED나 PROPAGATION_REQUIRES_NEW 와 함께 사용해야 의미가 있다.
+
+#### 읽기 전용
+
+- 읽기 전용으로 설정해두면 트랜잭션 내에서 데이터를 조작하는 시도를 막이줄 수 있다.
+
+### 6.6.2 트랜잭션 인터셉터와 트랜잭션 속성
+
+- 트랜잭션 정의를 수정하기 위해서는 경계 설정 기능을 가진 TransactionAdvice를 기능별로 재정의 하는 것 보다는 `TransactionInterceptor` 를 사용하는 것이 좋다.
+- `TransactionInterceptor` 는 이미 스프링에서 편리하게 트랜잭션 경계설정 어드바이스로 사용할 수 있도록 만들어 둔 것이다.
+- `TransactionInterceptor` 는 기본적으로 TransactionAdvice와 동일하게 동작하면서 메소드 이름 패턴을 이용하여 다르게 지정할 수 있는 방법을 추가로 제공해준다.
+- `TransactionInterceptor` 는 `PlatformTransactionManager` 와 `Properties` 타입의 두 가지 프로퍼티를 갖는다.
+  - `Properties` 타입의 프로퍼티는 `트랜잭션 속성`을 정의한 `TransactionAttribute` 타입의 프로퍼티다.
+  - `Properties` 는 `transactionAttributes`라는 이름을 가지며,  (메소드 패턴, 트랜잭션 속성)을 (key, value) 형태의 Map으로 전달 받는다.
+- `TransactionInterceptor` 프로퍼티는 기본적으로 4가지 속성(전파, 격리 수준, 제한 시간, 읽기 전용) 항목과 롤백 여부를 판단하는 `rollbackOn` 메소드를 가지고 있다.
+  -  rollbackOn 메소드는 어떤 예외가 발생할 때 롤백할 지를 결정한다.
+- `TransactionInterceptor` 는 기본적으로 예외에 따라 두 가지 처리 방식이 존재한다.
+  - `런타임 예외` 발생 시 트랜잭션은 `롤백`된다.
+  - `체크 예외` 발생 시 예외 상황으로 판단하지 않아서 `커밋` 한다.
+  - 스프링에서는 기본적으로 체크 예외는 비즈니시 로직 상 의미가 있다고 판단한다.
+  - `rollbackOn` 에서는 이러한 원칙 외 다른 예외처리를 가능하도록 한다.
+
+#### 메소드 이름 패턴일 이용한 트랜잭션 속성 지정
+
+- transactionAttributes의 트랜잭션 속성
+  - PROPAGATION_NAME: 트랜잭션 전파 방식으로 필수 항목이다.
+  - ISOLATION_NAME: 격리 수준으로 생략 가능하다.
+  - readOnly: 읽지 전용 항목으로 생략 가능하다.
+  - timeout_NNNN: 제한시간으로 생략 가능하다.
+  - -Exception1: 체크 예외 중 롤백 대상으로 추가할 것을 넣는다.
+  - +Exception2: 런타임 예외지만, 롤백시키지 않을 예외들을 넣는다.
+- 메소드 이름 패턴이 하나 이상과 일치한 경우, 가장 정확히 일치하는 패턴이 적용된다.
+
+```xml
+<bean id="transactionAdvice" class="org.springframework.transaction.interceptor.TransactionInterceptor">
+  <property name="transactionManager" ref="transactionManager" />
+  <property name="transactionAttributes">
+    <props>
+      <prop key="get*">PROPAGATION_REQUIRED,readOnly,timeout_30</prop>
+      <prop key="upgrade*">PROPAGATION_REQUIRES_NEW,ISOLATION_SERIEALIABLE</prop>
+      <prop key="*">PROPAGATION_REQUIRED</prop>
+    </props>
+  </property>
+</bean>
+```
+
+- 트랜잭션의 경우 기본적으로 자주 사용되기 때문에 `tx` 스키마의 태그를 이용해 간단하게 정의할 수 있다.
+  - 네임스페이스 및 스키마 위치 지정 필요.
+
+## 6.7 애노테이션 트랜잭션 속성과 포인트컷
+
+- 일반적으로는 포인트컷 표현식과 트랜잭션 속성을 이용해 트랜잭션을 일괄적으로 적용하는 방식은 잘 들어맞는다.
+- 모든 트랜잭션 로직을 일괄적으로 처리하기에는 클래스나 메소드에 따라 제각각 속성이 다르거나 튜닝된 트랜잭션을 적용해야 하는 경우가 있다.
+  - 모든 경우에 대해 포인트컷과 어드바이스를 새로 추가해줘야 하면 지저분해지고 복잡해진다.
+- 스프링에서는 트랜잭션 속성 제어를 설정파일ㄹ이 아니라, 어노테이션을 이용하여 타깃에 직접 지정하는 방법을 제공한다.
+
+### 6.7.1 트랜잭션 어노테이션
+
+- 스프링 3.0 부터는 자바 5에서 등장한 어노테이션을 이용하여 다양한 기능과 설정을 제공하며, `@Transactional` 도 그 중 하나다.
+- `@Transactional` 은 클래스, 어노테이션, 메소드에서 사용할 수 있다.
+- 스프링에서는 `@Transactional` 이 부여된 모든 오브젝트를 자동으로 타깃 오브젝트로 인식한다.
+  - 이때 `TransactionAttributeSourcePointCut` 을 포인트컷으로 사용하지만, 별도의 표현식이나 선정 방식이 있는 것은 아니다.
+
+#### @Transactional
+
+```java
+package org.springframework.transaction.annotation; // Spring의 annotaion이다.
+
+@Target({ElementType.TYPE, ElementType.METHOD}) // 어노테이션을 사용할 대상 지정(TYPE --> 클래스, 인터페이스 / METHOD --> 메소드)
+@Retention(RetentionPolicy.RUNTIME) // 어노테이션이 언제까지 유지되는지에 대한 내용
+@Inherited  // 상속을 통해서 어노테이션 정보를 얻을 수 있게 한다.
+@Documented
+public @interface Transactional {
+	@AliasFor("transactionManager")
+	String value() default "";
+	@AliasFor("value")
+	String transactionManager() default "";
+	String[] label() default {};
+	Propagation propagation() default Propagation.REQUIRED;
+	Isolation isolation() default Isolation.DEFAULT;
+	int timeout() default TransactionDefinition.TIMEOUT_DEFAULT;
+	String timeoutString() default "";
+	boolean readOnly() default false;
+	Class<? extends Throwable>[] rollbackFor() default {};
+	String[] rollbackForClassName() default {};
+	Class<? extends Throwable>[] noRollbackFor() default {};
+	String[] noRollbackForClassName() default {};
+}
+
+```
+
+#### 트랜잭션 속성을 이용하는 포인트컷
+
+- `@Transactional` 을 통한 트랜잭션에서 `TransactionInterceptor` 는 메소드 이름 패턴이 아니라 `AnnotationTransactionAttributeSource` 를 사용하여 어노테이션에 선언된 트랜잭션 속성을 가져ㅑ온다.
+- `@Transactional` 을 사용하면 메소드마다 다르게 설정할 수 있기 때문에 유여한 설정이 가능해진다.
+- `@Transactional` 이 선언된 오브젝트라면, 포인트컷 대상이 된다.
+- 정리하자면, `@Transactional`을 통해 포인트컷 대상과 트랜잭션 속성 정보를 한 번에 설정할 수 있다.
+
+#### 대체 정책
+
+- 스프링에서는 `@Transactional` 적용 시 4단계의 대체(fallback) 정책을 제공한다.
+  - 메소드에서 Transaction 속성 확인 시 `타깃 메소드` -> `타깃 클래스` -> `선언 메소드` -> `선언 타입(클래스, 인터페이스)` 순서로 `@Transactional`이 적용되었는지 확인한다.
+
+```java
+[1]
+public interface Serivce {
+  [2]
+  void method1();
+
+  [3]
+  void method2();
+}
+
+[4]
+public class ServiceImpl implements Service {
+  [5]
+  public void method1() {
+
+  }
+
+  [6]
+  public void method2() {
+
+  }
+}
+```
+
+- 위 코드에서 SerivceImpl의 method1 에 Transaction 속성 확인 시 [5] -> [4] -> [2] -> [1] 순으로 `@Transactional` 을 탐색한다.
+- 클래스 내에서 동일한 트랜잭션 속성을 사용한다면 [4] 또는 [1] 에 선언하면 된다.
+  - 클래스에 트랜잭션을 적용했기 때문에, 모든 메소드가 트랜잭션 대상이 됨을 주의해야 한다.
+  - [4] 에 선언하게 되면 실제 타깃 클래스(ServiceImpl)의 모든 메소드에서만 트랜잭션이 적용된다.
+  - [1] 에 선언하게 되면 ServiceImpl 뿐 아니라 Serivce의 모든 하위 클래스 모두 트랜잭션이 적용되기 때문에 주의해야 한다.
+- 클래스 내에서 동일한 트랜잭션 속성을 사용하지만, method1에만 특정 트랜잭션 속성을 사용한다면, [4] 선언 후 특정 속성만 [5] 에 선언하면 된다.
+- `@Transactional`은 일반적으로 클래스 단위에 선언한 후 세부 메소드에만 다시 선언하는 것이 좋다.
+- `@Transactional` interface에 선언하는 것도 좋지만, 프록시 방식을 사용하지 않는 경우가 있기 때문에 타깃 클래스에 선언하는 것이 좋다.
+  - Spring에서도 타깃 클래스에 선언하는 것을 권장한다.
+  - https://stackoverflow.com/questions/3120143/where-should-i-put-transactional-annotation-at-an-interface-definition-or-at-a
+
+#### 트랜잭션 어노테이션 사용을 위한 설정
+
+- 스프링에서는 `@Transactional`을 이용한 트랜잭션 속성을 사용하기 위한 방법을 하나의 태그에 담아뒀다.
+
+```xml
+<tx:annotation-driven />
+```
+
+### 6.7.2 트랜잭션 어노테이션 적용
+
+- 꼭 세밀한 설정이 필요할 때만 `@Transactional` 을 통해 트랜잭션을 적용하는 것은 아니다.
+- 트랜잭션 설정이 직관적이고 간단하기 떄문에 `@Transactional` 을 자주 사용한다.
+- `@Transactional` 은 무분별하게 사용하거나 자칫 빼먹을 수 있기 때문에 주의가 필요하다.
+
+- xml을 이용한 설정
+```xml
+<tx:attributes>
+  <tx:method name="get*" read-only="true"/>
+  <tx:method name="*" />
+</tx:attributes>
+```
+
+- `@Transactional`을 이용한 설정
+```JAVA
+@Transactional
+public interface UserService {
+  void add(User user);
+  void deleteAll();
+  void upgrade(User user);
+  void upgradeLevels();
+
+  @Transactional(readOnly=true)
+  User get(String id);
+
+  @Transactional(readOnly=true)
+  List<User> getAll();
+}
+```
+
+## 6.8 트랜잭션 지원 테스트
+
+- 테스트할 때 하나의 트랜잭션으로 묶고 싶을 때에도 `@Transactional`을 이용하면 간단하게 적용할 수 있다.
+- 테스트에서의 `@Transactional`은 테스트가 끝나면 자동으로 롤백시킨다.
+  - `@Rollback` 어노테이션의 옵션을 false 로 설정하면, 에러가 발생하지 않는 이상 롤백하지 않는다.
+  - `@Raollbak`은 메소드 단위로만 설정할 수 있다.
+  - `@TransactionConfiguration` 을 이용하면, 선언된 클래스 내 모든 메소드에 일괄 적용할 수 있다.
+- `@NotTransactional` 을 선언하면 트랜잭션을 시작하지 않는다.
+  - 다만, 스프링 3.0 부터는 사라졌기 때문에 사용하지 않기를 권한다.
+  - 트랜잭션을 시작하지 않고 싶다면, @Transactional(propagation=Propagation.NEVER)을 사용하는게 더 좋다.
+- DB를 사용하는 통합 테스트는 가능한 한 롤백 테스트로 만드는게 좋다.
